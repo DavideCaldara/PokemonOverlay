@@ -66,9 +66,9 @@
             const div = document.createElement("div");
             div.className = "pokemon";
 
-            if(row.pokemon){
+            if(row["B"]){
 
-                const num = String(row.pokemon).padStart(3,'0');
+                const num = String(row["B"]).padStart(3,'0');
 
                 div.innerHTML = `<img src="gifs/${num}.gif">`;
 
