@@ -4,20 +4,39 @@
     <meta charset="UTF-8">
     <title>Pokémon Team Overlay</title>
     <style>
+        :root {
+            /* Regola qui posizione e dimensioni (canvas 1920x1080) */
+            --start-left: 111px;   /* X del primo quadrato (in alto a sinistra) */
+            --start-top: 560px;   /* Y del primo quadrato */
+            --size: 100px;        /* lato di ogni quadrato */
+            --gap-x: 80px;        /* spazio orizzontale tra le 2 colonne */
+            --gap-y: 50px;        /* spazio verticale tra le 3 righe */
+        }
+
         body {
             margin: 0;
             background: transparent;
             overflow: hidden;
         }
 
+        /* Griglia 2 colonne x 3 righe: ordine 1 2 / 3 4 / 5 6 */
         #team {
             position: absolute;
-            left: 730px;
-            bottom: 20px;
+            left: var(--start-left);
+            top: var(--start-top);
+            display: grid;
+            grid-template-columns: repeat(2, var(--size));
+            grid-template-rows: repeat(3, var(--size));
+            column-gap: var(--gap-x);
+            row-gap: var(--gap-y);
+        }
+
+        .pokemon {
+            width: var(--size);
+            height: var(--size);
             display: flex;
-            flex-direction: row;
-            align-items: flex-end;
-            gap: 105px;
+            align-items: center;
+            justify-content: center;
         }
 
         .pokemon img {
@@ -26,14 +45,6 @@
             object-fit: contain;
             image-rendering: pixelated;
         }
-
-        .pokemon {
-            width: 100px;
-            height: 100px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
     </style>
 </head>
 <body>
@@ -41,35 +52,86 @@
 
     <script>
         const sheetURL = "https://opensheet.elk.sh/1xQVNhMk2uCDmleraFebmBcHk9vCNFd3yXnNxQMLEEFo/Foglio1";
-
-        async function updateTeam() {
-        try {
-        const res = await fetch(sheetURL, { cache: "no-store" });
-        const data = await res.json();
+        const SLOTS = 6;
 
         const container = document.getElementById("team");
-        container.innerHTML = "";
+        const slots = [];
+        const current = new Array(SLOTS).fill(null);
 
-        for (let i = 0; i < 6; i++) {
-        const row = data[i];
-        const div = document.createElement("div");
-        div.className = "pokemon";
-
-        const pokedexNum = row && row.pokemon;
-
-        if (pokedexNum) {
-        const num = String(pokedexNum).padStart(3, '0');
-        div.innerHTML = `<img src="gifs/${num}.gif">`;
-        } else {
-        div.style.visibility = "hidden";
+        // Crea i 6 slot una sola volta (le gif non ripartono a ogni refresh)
+        for (let i = 0; i < SLOTS; i++) {
+            const div = document.createElement("div");
+            div.className = "pokemon";
+            div.style.visibility = "hidden";
+            container.appendChild(div);
+            slots.push(div);
         }
 
-        container.appendChild(div);
+        // Nomi possibili: X.gif, XX.gif, XXX.gif (anche con zeri iniziali)
+        function candidates(num) {
+            const n = parseInt(num, 10);
+            if (isNaN(n)) return [];
+            const list = [
+                String(n),
+                String(n).padStart(2, "0"),
+                String(n).padStart(3, "0")
+            ];
+            return [...new Set(list)].map(name => `gifs/${name}.gif`);
         }
 
-        } catch(e) {
-        console.error("Errore:", e);
+        function setGif(slot, num) {
+            const urls = candidates(num);
+            if (urls.length === 0) {
+                slot.style.visibility = "hidden";
+                slot.innerHTML = "";
+                return;
+            }
+
+            const img = new Image();
+            let idx = 0;
+
+            img.onerror = () => {
+                idx++;
+                if (idx < urls.length) {
+                    img.src = urls[idx];
+                } else {
+                    console.error("Gif non trovata per:", num);
+                    slot.style.visibility = "hidden";
+                    slot.innerHTML = "";
+                }
+            };
+            img.onload = () => {
+                slot.innerHTML = "";
+                slot.appendChild(img);
+                slot.style.visibility = "visible";
+            };
+
+            img.src = urls[idx];
         }
+
+        async function updateTeam() {
+            try {
+                const res = await fetch(sheetURL, { cache: "no-store" });
+                const data = await res.json();
+
+                for (let i = 0; i < SLOTS; i++) {
+                    const row = data[i];
+                    const value = row && row.pokemon ? String(row.pokemon).trim() : "";
+
+                    // Aggiorna solo se è cambiato
+                    if (value === current[i]) continue;
+                    current[i] = value;
+
+                    if (value) {
+                        setGif(slots[i], value);
+                    } else {
+                        slots[i].style.visibility = "hidden";
+                        slots[i].innerHTML = "";
+                    }
+                }
+            } catch (e) {
+                console.error("Errore:", e);
+            }
         }
 
         updateTeam();
