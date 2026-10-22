@@ -7,10 +7,15 @@
         :root {
             /* Regola qui posizione e dimensioni (canvas 1920x1080) */
             --start-left: 111px;   /* X del primo quadrato (in alto a sinistra) */
-            --start-top: 560px;   /* Y del primo quadrato */
-            --size: 100px;        /* lato di ogni quadrato */
-            --gap-x: 80px;        /* spazio orizzontale tra le 2 colonne */
-            --gap-y: 50px;        /* spazio verticale tra le 3 righe */
+            --start-top: 560px;    /* Y del primo quadrato */
+            --size: 100px;         /* lato di ogni quadrato */
+            --gap-x: 80px;         /* spazio orizzontale tra le 2 colonne */
+            --gap-y: 50px;         /* spazio verticale tra le 3 righe */
+
+            /* Stile della label sotto la gif */
+            --label-size: 22px;
+            --label-color: #ffffff;
+            --label-offset: 4px;   /* distanza tra gif e label */
         }
 
         body {
@@ -32,18 +37,43 @@
         }
 
         .pokemon {
+            position: relative;
             width: var(--size);
             height: var(--size);
+        }
+
+        .sprite {
+            width: 100%;
+            height: 100%;
             display: flex;
             align-items: center;
             justify-content: center;
         }
 
-        .pokemon img {
+        .sprite img {
             width: 100%;
             height: 100%;
             object-fit: contain;
             image-rendering: pixelated;
+        }
+
+        /* Label posizionata sotto la gif, senza alterare la griglia */
+        .label {
+            position: absolute;
+            top: calc(100% + var(--label-offset));
+            left: 50%;
+            transform: translateX(-50%);
+            white-space: nowrap;
+            font-family: "Segoe UI", Arial, sans-serif;
+            font-size: var(--label-size);
+            font-weight: 700;
+            color: var(--label-color);
+            text-align: center;
+            /* contorno per leggibilità su qualsiasi sfondo */
+            text-shadow:
+                -2px -2px 0 #000, 2px -2px 0 #000,
+                -2px  2px 0 #000, 2px  2px 0 #000,
+                 0    3px 4px rgba(0,0,0,.6);
         }
     </style>
 </head>
@@ -56,21 +86,29 @@
 
         const container = document.getElementById("team");
         const slots = [];
-        const current = new Array(SLOTS).fill(null);
+        const current = new Array(SLOTS).fill(null); // chiave "pokemon|nome" per slot
 
         // Crea i 6 slot una sola volta (le gif non ripartono a ogni refresh)
         for (let i = 0; i < SLOTS; i++) {
             const div = document.createElement("div");
             div.className = "pokemon";
             div.style.visibility = "hidden";
+
+            const sprite = document.createElement("div");
+            sprite.className = "sprite";
+            const label = document.createElement("div");
+            label.className = "label";
+
+            div.appendChild(sprite);
+            div.appendChild(label);
             container.appendChild(div);
-            slots.push(div);
+            slots.push({ root: div, sprite, label, gifKey: null });
         }
 
         // Nomi possibili: X.gif, XX.gif, XXX.gif (anche con zeri iniziali)
         function candidates(num) {
             const n = parseInt(num, 10);
-            if (isNaN(n)) return [];
+            if (isNaN(n) || n <= 0) return [];
             const list = [
                 String(n),
                 String(n).padStart(2, "0"),
@@ -79,31 +117,39 @@
             return [...new Set(list)].map(name => `gifs/${name}.gif`);
         }
 
+        function hideSlot(slot) {
+            slot.root.style.visibility = "hidden";
+            slot.sprite.innerHTML = "";
+            slot.label.textContent = "";
+            slot.gifKey = null;
+        }
+
         function setGif(slot, num) {
             const urls = candidates(num);
             if (urls.length === 0) {
-                slot.style.visibility = "hidden";
-                slot.innerHTML = "";
+                hideSlot(slot);
                 return;
             }
 
             const img = new Image();
             let idx = 0;
+            slot.gifKey = num; // per scartare caricamenti obsoleti
 
             img.onerror = () => {
+                if (slot.gifKey !== num) return;
                 idx++;
                 if (idx < urls.length) {
                     img.src = urls[idx];
                 } else {
                     console.error("Gif non trovata per:", num);
-                    slot.style.visibility = "hidden";
-                    slot.innerHTML = "";
+                    hideSlot(slot);
                 }
             };
             img.onload = () => {
-                slot.innerHTML = "";
-                slot.appendChild(img);
-                slot.style.visibility = "visible";
+                if (slot.gifKey !== num) return;
+                slot.sprite.innerHTML = "";
+                slot.sprite.appendChild(img);
+                slot.root.style.visibility = "visible";
             };
 
             img.src = urls[idx];
@@ -117,16 +163,24 @@
                 for (let i = 0; i < SLOTS; i++) {
                     const row = data[i];
                     const value = row && row.pokemon ? String(row.pokemon).trim() : "";
+                    const nome  = row && row.nome    ? String(row.nome).trim()    : "";
+                    const key = value + "|" + nome;
 
                     // Aggiorna solo se è cambiato
-                    if (value === current[i]) continue;
-                    current[i] = value;
+                    if (key === current[i]) continue;
 
-                    if (value) {
-                        setGif(slots[i], value);
-                    } else {
-                        slots[i].style.visibility = "hidden";
-                        slots[i].innerHTML = "";
+                    const prevValue = current[i] ? current[i].split("|")[0] : null;
+                    current[i] = key;
+
+                    slots[i].label.textContent = nome;
+
+                    // Ricarica la gif solo se è cambiato il pokemon (non per un semplice cambio di nome)
+                    if (value !== prevValue) {
+                        if (value) {
+                            setGif(slots[i], value);
+                        } else {
+                            hideSlot(slots[i]);
+                        }
                     }
                 }
             } catch (e) {
