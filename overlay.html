@@ -108,13 +108,18 @@
         // Nomi possibili: X.gif, XX.gif, XXX.gif (anche con zeri iniziali)
         function candidates(num) {
             const n = parseInt(num, 10);
-            if (isNaN(n) || n <= 0) return [];
+            if (isNaN(n)) return [];
             const list = [
                 String(n),
                 String(n).padStart(2, "0"),
                 String(n).padStart(3, "0")
             ];
-            return [...new Set(list)].map(name => `gifs/${name}.gif`);
+            const names = [...new Set(list)];
+            // prima tutte le .gif, poi come ripiego le .png
+            return [
+                ...names.map(name => `gifs/${name}.gif`),
+                ...names.map(name => `gifs/${name}.png`)
+            ];
         }
 
         function hideSlot(slot) {
